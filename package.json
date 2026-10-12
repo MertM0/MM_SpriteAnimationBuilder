@@ -1,0 +1,24 @@
+{
+  "name": "com.mm.spriteanimationbuilder",
+  "version": "0.1.0",
+  "displayName": "MM Sprite Animation Builder",
+  "description": "Builds sprite animation clips and Animator states from numbered PNG frame folders. Multi part sprites, pivot modes, reference tracking, a sub-frame tick grid and frame-anchored events are switched per profile.",
+  "unity": "6000.0",
+  "documentationUrl": "https://github.com/MertM0/MM_SpriteAnimationBuilder",
+  "changelogUrl": "https://github.com/MertM0/MM_SpriteAnimationBuilder/blob/main/changelog.md",
+  "licensesUrl": "https://github.com/MertM0/MM_SpriteAnimationBuilder/blob/main/LICENSE.md",
+  "dependencies": {},
+  "keywords": [
+    "sprite",
+    "animation",
+    "animator",
+    "2d",
+    "editor",
+    "pixel-art"
+  ],
+  "author": {
+    "name": "MertM",
+    "email": "mertapsi@gmail.com",
+    "url": "https://github.com/MertM0"
+  }
+}
