@@ -36,7 +36,7 @@ namespace MM.SpriteAnimation
         private Label details;
         private ListView logView;
 
-        [MenuItem("Tools/MM/Sprite Animation Builder")]
+        [MenuItem("Tools/Sprite Animation Builder")]
         public static void Open() => GetWindow<SpriteAnimationWindow>(WindowTitle);
 
         public static void Open(SpriteAnimationProfile target)

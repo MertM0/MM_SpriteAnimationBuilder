@@ -1,7 +1,7 @@
 # MM Sprite Animation Builder
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.md)
 [![Unity](https://img.shields.io/badge/Unity-6000.0%2B-blue.svg)](https://unity.com/)
-[![version](https://img.shields.io/badge/version-0.1.0-blue.svg)](changelog.md)
+[![version](https://img.shields.io/badge/version-0.1.1-blue.svg)](changelog.md)
 
 _Sprite animation clips and Animator states from numbered PNG folders_
 
@@ -32,7 +32,7 @@ Or add it to `Packages/manifest.json`:
 
 Requires Unity 6000.0 or newer. Editor only, no dependencies.
 
-Open **Tools → MM → Sprite Animation Builder**, press **+** to create a profile, set its
+Open **Tools → Sprite Animation Builder**, press **+** to create a profile, set its
 **Sprite Root** and **Clip Root**, then add one folder per animation and press **Build All**:
 
 ```

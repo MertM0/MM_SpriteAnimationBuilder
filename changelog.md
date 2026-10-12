@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.1] - 2026-10-12
+
+- The window menu item moved from `Tools/MM/Sprite Animation Builder` to `Tools/Sprite Animation Builder`.
+
 ## [0.1.0] - 2026-10-12
 
 First release.
