@@ -1,6 +1,6 @@
 {
   "name": "com.mm.spriteanimationbuilder",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "displayName": "MM Sprite Animation Builder",
   "description": "Builds sprite animation clips and Animator states from numbered PNG frame folders. Multi part sprites, pivot modes, reference tracking, a sub-frame tick grid and frame-anchored events are switched per profile.",
   "unity": "6000.0",

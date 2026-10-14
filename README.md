@@ -1,7 +1,7 @@
 # MM Sprite Animation Builder
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.md)
 [![Unity](https://img.shields.io/badge/Unity-6000.0%2B-blue.svg)](https://unity.com/)
-[![version](https://img.shields.io/badge/version-0.1.1-blue.svg)](changelog.md)
+[![version](https://img.shields.io/badge/version-0.2.0-blue.svg)](changelog.md)
 
 _Sprite animation clips and Animator states from numbered PNG folders_
 
