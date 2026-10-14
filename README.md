@@ -62,7 +62,7 @@ edited in place. Search by name or filter by status.
 | **Timing reset needed** | Custom timing no longer fits the frames, see [Timing Reset](#timing-reset) |
 | **Invalid** | A problem with the frames, for example a gap in the numbering |
 | **No state** | A folder without a state; a close state name is suggested |
-| **No art** | A state without a folder |
+| **No art** | A state without a folder; with an override controller it says so when the state still plays the base clip |
 
 ### Building
 
@@ -90,7 +90,8 @@ Settings of a feature that is turned off are hidden.
 numbered from `01` without gaps; a misspelled case only warns.
 
 `Clip Prefix` and `File Prefix` are added to clip and frame names: with `Hero_`, the `Walk`
-folder expects `Hero_Walk_01.png` and writes `Hero_Walk.anim`.
+folder expects `Hero_Walk_01.png` and writes `Hero_Walk.anim`. With a `Folder Prefix` only folders
+starting with it are read and the prefix is dropped: `Hero_Walk/` becomes the `Walk` row.
 
 ### Controller
 
@@ -102,6 +103,18 @@ Optional. Without one, rows come from the sprite folders and only clips are writ
 - **Animator Override Controller.** States are read from the base controller and the clip
   overrides each state's original clip. Give every state its own placeholder clip; states that
   share one are overridden together.
+
+### Variants
+
+For several looks of the same character. A profile with **Variant Of** set reads the shared
+settings (sprites, parts, import, timing, tracking, fallbacks, loop) from its base and keeps its own
+roots, controller, prefixes and frame rates; an FPS left empty follows the base row. **Create
+Override** makes the variant's override controller from the base controller.
+
+A family shows as one tab with a strip of its members. **Overview** compares every member's rows,
+**Build Family** builds the base first, then the variants. **Fallbacks** on the base
+(`Spawn ← Fly_Start`) build a missing animation from another one's frames instead of letting the
+state play the base character's clip.
 
 ### Sprites and Import
 
