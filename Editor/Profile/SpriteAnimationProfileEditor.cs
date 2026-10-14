@@ -18,9 +18,17 @@ namespace MM.SpriteAnimation
         private SerializedProperty pivot;
         private SerializedProperty tickGrid;
         private SerializedProperty trackingEnabled;
+        private SerializedProperty variantOf;
+        private SerializedProperty clipRoot;
+
+        private readonly List<VisualElement> sharedSections = new List<VisualElement>();
 
         private DropdownField layerField;
         private PropertyField createMissingField;
+        private PropertyField defaultFrameRateField;
+        private VisualElement variantInfo;
+        private Label variantInfoLabel;
+        private Button createOverrideButton;
         private PropertyField rendererPathField;
         private PropertyField partsField;
         private PropertyField customPivotField;
@@ -37,22 +45,30 @@ namespace MM.SpriteAnimation
             pivot = serializedObject.FindProperty("pivot");
             tickGrid = serializedObject.FindProperty("tickGrid");
             trackingEnabled = serializedObject.FindProperty("tracking.enabled");
+            variantOf = serializedObject.FindProperty("variantOf");
+            clipRoot = serializedObject.FindProperty("clipRoot");
+            sharedSections.Clear();
 
             var root = new VisualElement();
 
             VisualElement general = Section(root, "General");
+            general.Add(Field("variantOf"));
+            general.Add(variantInfo = CreateVariantInfo());
             general.Add(Field("displayName"));
             general.Add(Field("spriteRoot"));
             general.Add(Field("clipRoot"));
             general.Add(Field("controller"));
+            createOverrideButton = new Button(OnCreateOverride) { text = "Create Override" };
+            general.Add(createOverrideButton);
             layerField = new DropdownField("Layer");
             layerField.AddToClassList(BaseField<string>.alignedFieldUssClassName);
             layerField.RegisterValueChangedCallback(OnLayerChanged);
             general.Add(layerField);
             general.Add(Field("clipPrefix"));
             general.Add(Field("filePrefix"));
+            general.Add(Field("folderPrefix"));
             general.Add(createMissingField = Field("createMissingStates"));
-            general.Add(Field("defaultFrameRate"));
+            general.Add(defaultFrameRateField = Field("defaultFrameRate"));
 
             VisualElement sprites = Section(root, "Sprites");
             sprites.Add(Field("pixelsPerUnit"));
@@ -77,6 +93,9 @@ namespace MM.SpriteAnimation
             timing.Add(minTickRateField = Field("minTickRate"));
             timing.Add(Field("eventSync"));
 
+            VisualElement fallbacks = Section(root, "Fallbacks");
+            fallbacks.Add(Field("fallbacks"));
+
             VisualElement tracking = Section(root, "Reference Tracking");
             tracking.Add(Field("tracking.enabled", "Enabled"));
             trackingBody = new VisualElement();
@@ -87,11 +106,13 @@ namespace MM.SpriteAnimation
             trackingBody.Add(Field("tracking.rotationDeadZone"));
             tracking.Add(trackingBody);
 
+            foreach (VisualElement body in new[] { sprites, partsSection, import, timing, fallbacks, tracking }) sharedSections.Add(body.parent);
+
             var open = new Button(() => SpriteAnimationWindow.Open((SpriteAnimationProfile)target)) { text = "Open in Sprite Animation Builder" };
             open.style.marginTop = 8f;
             root.Add(open);
 
-            foreach (SerializedProperty property in new[] { controller, layer, multiPart, parts, pivot, tickGrid, trackingEnabled })
+            foreach (SerializedProperty property in new[] { controller, layer, multiPart, parts, pivot, tickGrid, trackingEnabled, variantOf, clipRoot })
             {
                 root.TrackPropertyValue(property, _ => UpdateVisibility());
             }
@@ -120,6 +141,61 @@ namespace MM.SpriteAnimation
             var asset = controller.objectReferenceValue as RuntimeAnimatorController;
             Show(createMissingField, asset is AnimatorController);
             RebuildLayerChoices(asset);
+            UpdateVariantVisibility();
+        }
+
+        private void UpdateVariantVisibility()
+        {
+            var profile = (SpriteAnimationProfile)target;
+            bool variant = profile.IsVariant;
+            Show(variantInfo, variant);
+            Show(defaultFrameRateField, !variant);
+            foreach (VisualElement section in sharedSections) Show(section, !variant);
+            if (variant)
+            {
+                variantInfoLabel.text = $"Shared settings come from '{profile.VariantOf.DisplayName}'.";
+                Show(layerField, false);
+                Show(createMissingField, false);
+            }
+
+            bool showCreate = variant && controller.objectReferenceValue == null;
+            Show(createOverrideButton, showCreate);
+            if (showCreate)
+            {
+                bool can = ProfileVariants.CanCreateOverride(profile, out string reason);
+                createOverrideButton.SetEnabled(can);
+                createOverrideButton.tooltip = reason ?? string.Empty;
+            }
+        }
+
+        private VisualElement CreateVariantInfo()
+        {
+            var info = new VisualElement();
+            info.style.flexDirection = FlexDirection.Row;
+            info.style.alignItems = Align.Center;
+            variantInfoLabel = new Label();
+            variantInfoLabel.style.flexGrow = 1f;
+            variantInfoLabel.style.marginLeft = 3f;
+            info.Add(variantInfoLabel);
+            info.Add(new Button(SelectBase) { text = "Select Base" });
+            return info;
+        }
+
+        private void SelectBase()
+        {
+            SpriteAnimationProfile baseProfile = ((SpriteAnimationProfile)target).VariantOf;
+            if (baseProfile == null) return;
+            Selection.activeObject = baseProfile;
+            EditorGUIUtility.PingObject(baseProfile);
+        }
+
+        private void OnCreateOverride()
+        {
+            var report = new SpriteAnimationReport();
+            ProfileVariants.CreateOverride((SpriteAnimationProfile)target, report);
+            foreach (ReportEntry entry in report.Entries) Debug.LogWarning(entry.Message, target);
+            serializedObject.Update();
+            UpdateVisibility();
         }
 
         private void RebuildLayerChoices(RuntimeAnimatorController asset)
@@ -156,10 +232,11 @@ namespace MM.SpriteAnimation
             header.style.unityFontStyleAndWeight = FontStyle.Bold;
             header.style.marginTop = 8f;
             header.style.marginLeft = 3f;
-            root.Add(header);
-
+            var section = new VisualElement();
+            section.Add(header);
             var body = new VisualElement();
-            root.Add(body);
+            section.Add(body);
+            root.Add(section);
             return body;
         }
 

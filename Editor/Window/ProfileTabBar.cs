@@ -14,6 +14,8 @@ namespace MM.SpriteAnimation
         private static readonly string[] SearchRoots = { "Assets" };
 
         private readonly List<SpriteAnimationProfile> profiles = new List<SpriteAnimationProfile>();
+        private readonly List<List<SpriteAnimationProfile>> families = new List<List<SpriteAnimationProfile>>();
+        private readonly List<SpriteAnimationProfile> bases = new List<SpriteAnimationProfile>();
         private readonly List<ToolbarToggle> tabs = new List<ToolbarToggle>();
         private readonly Action<SpriteAnimationProfile> selected;
         private readonly Action<SpriteAnimationProfile> created;
@@ -36,23 +38,54 @@ namespace MM.SpriteAnimation
         internal SpriteAnimationProfile Reload(SpriteAnimationProfile current, bool showSettings, out bool rebuilt)
         {
             List<SpriteAnimationProfile> found = FindProfiles();
-            bool listChanged = !found.SequenceEqual(profiles);
             profiles.Clear();
             profiles.AddRange(found);
+            List<SpriteAnimationProfile> previousBases = bases.ToList();
+            Regroup();
             if (current == null || !profiles.Contains(current)) current = RestoreSelection();
 
-            rebuilt = childCount == 0 || listChanged || current != shown;
+            SpriteAnimationProfile shownBase = BaseOf(current);
+            rebuilt = childCount == 0 || !bases.SequenceEqual(previousBases) || shownBase != shown;
             if (rebuilt)
             {
-                shown = current;
+                shown = shownBase;
                 settingsVisible = showSettings;
                 Rebuild();
             }
             else
             {
-                for (int i = 0; i < tabs.Count; i++) tabs[i].text = profiles[i].DisplayName;
+                for (int i = 0; i < tabs.Count; i++) tabs[i].text = bases[i].DisplayName;
             }
             return current;
+        }
+
+        internal IReadOnlyList<SpriteAnimationProfile> FamilyOf(SpriteAnimationProfile profile)
+        {
+            return families.FirstOrDefault(family => family.Contains(profile)) ?? (IReadOnlyList<SpriteAnimationProfile>)Array.Empty<SpriteAnimationProfile>();
+        }
+
+        internal void CreateVariantOf(SpriteAnimationProfile baseProfile)
+        {
+            string folder = Path.GetDirectoryName(AssetDatabase.GetAssetPath(baseProfile)).Replace('\\', '/');
+            string path = EditorUtility.SaveFilePanelInProject("New Variant", $"{baseProfile.name}_Variant", "asset", "Choose where to save the variant.", folder);
+            if (string.IsNullOrEmpty(path)) return;
+
+            BuilderPrefs.LastProfileFolder = Path.GetDirectoryName(path).Replace('\\', '/');
+            created(ProfileVariants.CreateVariant(baseProfile, path));
+        }
+
+        private SpriteAnimationProfile BaseOf(SpriteAnimationProfile profile)
+        {
+            IReadOnlyList<SpriteAnimationProfile> family = FamilyOf(profile);
+            return family.Count > 0 ? family[0] : null;
+        }
+
+        private void Regroup()
+        {
+            families.Clear();
+            families.AddRange(ProfileFamily.Group(profiles, item => item.VariantOf, item => item.DisplayName));
+            bases.Clear();
+            bases.AddRange(families.Select(family => family[0]));
         }
 
         private static List<SpriteAnimationProfile> FindProfiles()
@@ -77,7 +110,7 @@ namespace MM.SpriteAnimation
         {
             Clear();
             tabs.Clear();
-            foreach (SpriteAnimationProfile item in profiles)
+            foreach (SpriteAnimationProfile item in bases)
             {
                 var tab = new ToolbarToggle { text = item.DisplayName, value = item == shown };
                 tab.RegisterValueChangedCallback(evt =>
@@ -90,8 +123,8 @@ namespace MM.SpriteAnimation
                 Add(tab);
             }
 
-            var add = new ToolbarButton { text = "+", tooltip = "Create a new profile" };
-            add.clicked += Create;
+            var add = new ToolbarButton { text = "+", tooltip = "Create a new profile or variant" };
+            add.clicked += ShowAddMenu;
             Add(add);
 
             var spacer = new ToolbarSpacer();
@@ -110,11 +143,21 @@ namespace MM.SpriteAnimation
 
         private void Move(int from, int to)
         {
-            BuilderPrefs.TabOrder = ProfileOrder.Move(profiles.Select(GuidOf).ToList(), from, to);
+            BuilderPrefs.TabOrder = ProfileOrder.Move(bases.Select(GuidOf).ToList(), from, to);
             List<SpriteAnimationProfile> sorted = ProfileOrder.Sort(profiles, GuidOf, item => item.DisplayName, BuilderPrefs.TabOrder);
             profiles.Clear();
             profiles.AddRange(sorted);
+            Regroup();
             schedule.Execute(Rebuild);
+        }
+
+        private void ShowAddMenu()
+        {
+            var menu = new GenericMenu();
+            menu.AddItem(new GUIContent("New Profile…"), false, Create);
+            if (shown != null && shown.RawVariantOf == null) menu.AddItem(new GUIContent($"New Variant of '{shown.DisplayName}'…"), false, () => CreateVariantOf(shown));
+            else menu.AddDisabledItem(new GUIContent("New Variant…"));
+            menu.ShowAsContext();
         }
 
         private void Create()

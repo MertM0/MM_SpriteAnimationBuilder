@@ -11,6 +11,7 @@ namespace MM.SpriteAnimation
         [SerializeField] private bool loop;
         [SerializeField] private string fingerprint;
         [SerializeField] private string timing;
+        [SerializeField] private bool ownFrameRate;
 
         internal string Name => name;
         internal int FrameRate => frameRate;
@@ -18,13 +19,15 @@ namespace MM.SpriteAnimation
         internal string Fingerprint => fingerprint;
         internal string Timing => timing;
         internal bool IsBuilt => !string.IsNullOrEmpty(fingerprint);
+        internal bool OwnFrameRate => ownFrameRate;
 
         internal static AnimationEntry Create(string animation, int frameRate) => new AnimationEntry { name = animation, frameRate = frameRate };
 
-        internal void SetSettings(int newFrameRate, bool newLoop)
+        internal void SetSettings(int newFrameRate, bool newLoop, bool newOwnFrameRate)
         {
             frameRate = newFrameRate;
             loop = newLoop;
+            ownFrameRate = newOwnFrameRate;
         }
 
         internal void SetFingerprint(string value) => fingerprint = value;

@@ -77,6 +77,33 @@
 .sab-status--uptodate { color: rgb(110, 195, 110); }
 .sab-status--timingreset { color: rgb(230, 140, 60); }
 
+.sab-fallback {
+    opacity: 0.6;
+    margin-left: 6px;
+}
+
+.sab-inherited {
+    opacity: 0.55;
+}
+
+.sab-variant-strip {
+    flex-shrink: 0;
+}
+
+.sab-overview {
+    flex-grow: 1;
+}
+
+.sab-overview-cell {
+    min-width: 110px;
+    padding: 2px 6px;
+    -unity-text-align: middle-left;
+}
+
+.sab-overview-header {
+    -unity-font-style: bold;
+}
+
 .sab-filter {
     min-width: 130px;
 }

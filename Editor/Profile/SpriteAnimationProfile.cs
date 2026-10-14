@@ -31,30 +31,42 @@ namespace MM.SpriteAnimation
         [SerializeField] private int minTickRate = ClipTiming.DefaultMinTickRate;
         [SerializeField] private bool eventSync = true;
         [SerializeField] private TrackingSettings tracking = new TrackingSettings();
+        [SerializeField] private SpriteAnimationProfile variantOf;
+        [SerializeField] private string folderPrefix = string.Empty;
+        [SerializeField] private List<AnimationFallback> fallbacks = new List<AnimationFallback>();
         [SerializeField] private List<AnimationEntry> animations = new List<AnimationEntry>();
 
         public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name : displayName;
 
+        internal SpriteAnimationProfile RawVariantOf => variantOf;
+        internal bool HasMissingBase => !ReferenceEquals(variantOf, null) && variantOf == null;
+        internal SpriteAnimationProfile VariantOf => IsUsableBase(variantOf) ? variantOf : null;
+        internal bool IsVariant => VariantOf != null;
+        internal string FolderPrefix => folderPrefix ?? string.Empty;
+        internal IReadOnlyList<AnimationFallback> Fallbacks => Shared.fallbacks;
+
         internal string SpriteRootPath => FolderPath(spriteRoot);
         internal string ClipRootPath => FolderPath(clipRoot);
         internal RuntimeAnimatorController Controller => controller;
-        internal string Layer => layer ?? string.Empty;
+        internal string Layer => Shared.layer ?? string.Empty;
         internal string ClipPrefix => clipPrefix ?? string.Empty;
         internal string FilePrefix => filePrefix ?? string.Empty;
-        internal bool CreateMissingStates => createMissingStates;
-        internal int DefaultFrameRate => defaultFrameRate;
-        internal bool MultiPart => multiPart;
-        internal IReadOnlyList<SpritePart> Parts => parts;
-        internal float PixelsPerUnit => pixelsPerUnit;
-        internal bool FlipX => flipX;
-        internal SpritePivotMode Pivot => pivot;
-        internal Vector2 CustomPivot => customPivot;
-        internal Sprite AnchorSprite => anchorSprite;
-        internal SpriteImportSettings Import => import;
-        internal int MinTickRate => tickGrid ? Mathf.Clamp(minTickRate, 1, MaxTickRate) : 1;
-        internal bool EventSync => eventSync;
-        internal TrackingSettings Tracking => tracking;
+        internal bool CreateMissingStates => Shared.createMissingStates;
+        internal int DefaultFrameRate => Shared.defaultFrameRate;
+        internal bool MultiPart => Shared.multiPart;
+        internal IReadOnlyList<SpritePart> Parts => Shared.parts;
+        internal float PixelsPerUnit => Shared.pixelsPerUnit;
+        internal bool FlipX => Shared.flipX;
+        internal SpritePivotMode Pivot => Shared.pivot;
+        internal Vector2 CustomPivot => Shared.customPivot;
+        internal Sprite AnchorSprite => Shared.anchorSprite;
+        internal SpriteImportSettings Import => Shared.import;
+        internal int MinTickRate => Shared.tickGrid ? Mathf.Clamp(Shared.minTickRate, 1, MaxTickRate) : 1;
+        internal bool EventSync => Shared.eventSync;
+        internal TrackingSettings Tracking => Shared.tracking;
         internal IReadOnlyList<AnimationEntry> Animations => animations;
+
+        private SpriteAnimationProfile Shared => VariantOf ?? this;
 
         internal string ClipPath(string animation) => $"{ClipRootPath}/{ClipPrefix}{animation}.anim";
 
@@ -67,18 +79,38 @@ namespace MM.SpriteAnimation
             return null;
         }
 
-        internal int FrameRateOf(string animation) => FindEntry(animation)?.FrameRate ?? defaultFrameRate;
-        internal bool LoopOf(string animation) => FindEntry(animation)?.Loop ?? false;
+        internal int FrameRateOf(string animation)
+        {
+            AnimationEntry entry = FindEntry(animation);
+            if (IsVariant && (entry == null || !entry.OwnFrameRate)) return VariantOf.FrameRateOf(animation);
+            return entry?.FrameRate ?? defaultFrameRate;
+        }
+
+        internal bool InheritsFrameRate(string animation) => IsVariant && !(FindEntry(animation)?.OwnFrameRate ?? false);
+        internal bool LoopOf(string animation) => Shared.FindEntry(animation)?.Loop ?? false;
         internal bool IsBuilt(string animation) => FindEntry(animation)?.IsBuilt ?? false;
         internal ClipTiming KnownTimingOf(string animation) => ClipTiming.TryParse(FindEntry(animation)?.Timing, out ClipTiming known) ? known : null;
 
+        internal void SetVariantOf(SpriteAnimationProfile value)
+        {
+            variantOf = value;
+            EditorUtility.SetDirty(this);
+        }
+
+        internal void SetController(RuntimeAnimatorController value)
+        {
+            controller = value;
+            EditorUtility.SetDirty(this);
+        }
+
         internal void SetRowSettings(string animation, int frameRate, bool loop)
         {
+            bool own = IsVariant && frameRate != VariantOf.FrameRateOf(animation);
             AnimationEntry entry = FindEntry(animation);
-            if (entry != null && entry.FrameRate == frameRate && entry.Loop == loop) return;
+            if (entry != null && entry.FrameRate == frameRate && entry.Loop == loop && entry.OwnFrameRate == own) return;
 
             Undo.RecordObject(this, "Sprite Animation Row Settings");
-            (entry ?? AddEntry(animation)).SetSettings(frameRate, loop);
+            (entry ?? AddEntry(animation)).SetSettings(frameRate, loop, own);
             EditorUtility.SetDirty(this);
         }
 
@@ -103,10 +135,12 @@ namespace MM.SpriteAnimation
 
         private AnimationEntry AddEntry(string animation)
         {
-            AnimationEntry entry = AnimationEntry.Create(animation, defaultFrameRate);
+            AnimationEntry entry = AnimationEntry.Create(animation, FrameRateOf(animation));
             animations.Add(entry);
             return entry;
         }
+
+        private bool IsUsableBase(SpriteAnimationProfile candidate) => candidate != null && candidate != this && candidate.variantOf == null;
 
         private void OnValidate()
         {

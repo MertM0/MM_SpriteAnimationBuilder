@@ -19,11 +19,13 @@ namespace MM.SpriteAnimation
         private const string StatusColumn = "status";
         private const string ActionsColumn = "actions";
         private const string BuildButtonName = "build";
+        private const string NameLabelName = "name-label";
+        private const string FallbackLabelName = "fallback-label";
         private const string StatusClassPrefix = "sab-status--";
         private const string Missing = "\u2014";
 
         private static readonly AnimationStatus[] Statuses = (AnimationStatus[])Enum.GetValues(typeof(AnimationStatus));
-        private static readonly string[] StatusClasses = Statuses.Select(status => StatusClassPrefix + status.ToString().ToLowerInvariant()).ToArray();
+        private static readonly string[] StatusClasses = Statuses.Select(StatusClass).ToArray();
 
         private readonly MultiColumnListView view;
         private readonly List<AnimationSource> rows = new List<AnimationSource>();
@@ -42,7 +44,7 @@ namespace MM.SpriteAnimation
             };
             view.AddToClassList("sab-table");
             view.viewDataKey = "sab-table";
-            view.columns.Add(TextColumn(NameColumn, "Animation", 240f, source => source.Name, true));
+            view.columns.Add(NameColumnDefinition());
             view.columns.Add(TextColumn(FramesColumn, "Frames", 80f, FrameSummary, false));
             view.columns.Add(FrameRateColumnDefinition());
             view.columns.Add(LoopColumnDefinition());
@@ -87,7 +89,9 @@ namespace MM.SpriteAnimation
                 text.Append(source.Name).Append('|').Append((int)source.Status).Append('|').Append(source.Fingerprint)
                     .Append('|').Append(owner.FrameRateOf(source.Name)).Append('|').Append(owner.LoopOf(source.Name))
                     .Append('|').Append(FrameSummary(source)).Append('|').Append(LengthText(source)).Append('|').Append(source.SuggestedState)
-                    .Append('|').Append(Details(source)).Append('\n');
+                    .Append('|').Append(Details(source)).Append('|').Append(source.ArtName).Append('|').Append(source.BaseClip)
+                    .Append('|').Append(owner.InheritsFrameRate(source.Name)).Append('|').Append(owner.VariantOf?.DisplayName)
+                    .Append('|').Append(owner.VariantOf?.FrameRateOf(source.Name)).Append('\n');
             }
             return text.ToString();
         }
@@ -118,7 +122,7 @@ namespace MM.SpriteAnimation
             switch (source.Status)
             {
                 case AnimationStatus.NoArt:
-                    return "No art";
+                    return source.PlaysBaseClip ? "No art (plays base clip)" : "No art";
                 case AnimationStatus.NoState:
                     return source.SuggestedState != null ? $"No state (did you mean '{source.SuggestedState}'?)" : "No state in controller";
                 case AnimationStatus.Invalid:
@@ -136,12 +140,15 @@ namespace MM.SpriteAnimation
 
         internal static bool HasCustomTiming(AnimationSource source) => source.Timing != null && !source.Timing.IsUniform;
 
+        internal static string StatusClass(AnimationStatus status) => StatusClassPrefix + status.ToString().ToLowerInvariant();
+
         private static string WithTiming(string text, AnimationSource source) => HasCustomTiming(source) ? $"{text}, custom timing" : text;
 
         internal static string Details(AnimationSource source)
         {
             IEnumerable<string> lines = source.Problems.Concat(source.Warnings);
             if (source.TimingProblem != null) lines = lines.Prepend(source.TimingProblem);
+            if (source.IsFallback) lines = lines.Prepend($"Uses the frames of '{source.ArtName}' (fallback). Add a '{source.Name}' folder to give it its own art.");
             return string.Join("\n", lines);
         }
 
@@ -216,6 +223,39 @@ namespace MM.SpriteAnimation
             return label;
         }
 
+        private Column NameColumnDefinition()
+        {
+            return new Column
+            {
+                name = NameColumn,
+                title = "Animation",
+                width = 240f,
+                minWidth = 60f,
+                stretchable = true,
+                makeCell = () =>
+                {
+                    var cell = new VisualElement();
+                    cell.style.flexDirection = FlexDirection.Row;
+                    var name = new Label { name = NameLabelName };
+                    name.AddToClassList("sab-cell");
+                    var fallback = new Label { name = FallbackLabelName };
+                    fallback.AddToClassList("sab-cell");
+                    fallback.AddToClassList("sab-fallback");
+                    cell.Add(name);
+                    cell.Add(fallback);
+                    return cell;
+                },
+                bindCell = (element, index) =>
+                {
+                    AnimationSource source = rows[index];
+                    element.Q<Label>(NameLabelName).text = source.Name;
+                    var fallback = element.Q<Label>(FallbackLabelName);
+                    fallback.text = source.IsFallback ? "↪ " + source.ArtName : string.Empty;
+                    fallback.style.display = source.IsFallback ? DisplayStyle.Flex : DisplayStyle.None;
+                },
+            };
+        }
+
         private Column FrameRateColumnDefinition()
         {
             return new Column
@@ -241,9 +281,19 @@ namespace MM.SpriteAnimation
                     AnimationSource source = rows[index];
                     field.userData = source;
                     field.SetValueWithoutNotify(profile.FrameRateOf(source.Name));
+                    bool inherited = profile.InheritsFrameRate(source.Name);
+                    field.EnableInClassList("sab-inherited", inherited);
+                    field.tooltip = FrameRateTooltip(source, inherited);
                     field.style.visibility = source.HasFolder ? Visibility.Visible : Visibility.Hidden;
                 },
             };
+        }
+
+        private string FrameRateTooltip(AnimationSource source, bool inherited)
+        {
+            if (!profile.IsVariant) return string.Empty;
+            if (inherited) return $"Inherited from '{profile.VariantOf.DisplayName}'. Type a different value to override; the base's value inherits again.";
+            return $"Own value (base: {profile.VariantOf.FrameRateOf(source.Name).ToString(CultureInfo.InvariantCulture)}).";
         }
 
         private Column LoopColumnDefinition()
@@ -268,6 +318,8 @@ namespace MM.SpriteAnimation
                     AnimationSource source = rows[index];
                     toggle.userData = source;
                     toggle.SetValueWithoutNotify(profile.LoopOf(source.Name));
+                    toggle.SetEnabled(!profile.IsVariant);
+                    toggle.tooltip = profile.IsVariant ? $"Loop is shared by the family; set it on '{profile.VariantOf.DisplayName}'." : string.Empty;
                     toggle.style.visibility = source.HasFolder ? Visibility.Visible : Visibility.Hidden;
                 },
             };

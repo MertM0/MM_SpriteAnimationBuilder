@@ -42,7 +42,7 @@ namespace MM.SpriteAnimation
                 return;
             }
 
-            IReadOnlyList<string> frames = SpriteFrameCollector.Collect(directory, pngs, $"{source.Name}_{tracking.Token}_", tracking.FolderName, source.ProblemSink, source.WarningSink);
+            IReadOnlyList<string> frames = SpriteFrameCollector.Collect(directory, pngs, $"{source.ArtName}_{tracking.Token}_", tracking.FolderName, source.ProblemSink, source.WarningSink);
             if (frames.Count > 0 && source.FrameCount > 0 && frames.Count != source.FrameCount)
             {
                 source.AddProblem($"{tracking.FolderName} has {frames.Count} frame(s), {source.Parts[0].Part.Label} has {source.FrameCount}.");

@@ -8,5 +8,6 @@ namespace MM.SpriteAnimation
         Invalid,
         NoArt,
         NoState,
+        Fallback,
     }
 }

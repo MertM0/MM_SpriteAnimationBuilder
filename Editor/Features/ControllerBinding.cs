@@ -107,6 +107,24 @@ namespace MM.SpriteAnimation
             if (others.Count > 0) source.AddWarning($"Shares its original clip with '{string.Join("', '", others)}'; the override changes both.");
         }
 
+        internal bool IsAssigned(string animation, string clipPath)
+        {
+            if (asset == null || !states.TryGetValue(animation, out AnimatorState state)) return true;
+            var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
+            if (clip == null) return true;
+            if (overrides == null) return state.motion == clip;
+            if (!(state.motion is AnimationClip original)) return true;
+            if (motionUsers.TryGetValue(original, out List<(AnimatorState State, string Label)> users) && users.Count > 1) return true;
+            return overrides[original] == clip;
+        }
+
+        internal AnimationClip BaseClipPlayed(string animation)
+        {
+            if (overrides == null || !states.TryGetValue(animation, out AnimatorState state) || !(state.motion is AnimationClip original)) return null;
+            AnimationClip mapped = overrides[original];
+            return mapped == null || mapped == original ? original : null;
+        }
+
         internal bool Assign(string animation, AnimationClip clip)
         {
             if (asset == null) return false;

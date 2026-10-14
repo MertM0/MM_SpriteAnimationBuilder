@@ -18,15 +18,22 @@ namespace MM.SpriteAnimation
         private const long SettingsRefreshDelay = 150;
 
         private readonly List<ReportEntry> log = new List<ReportEntry>();
+        private readonly List<SpriteAnimationProfile> logOwners = new List<SpriteAnimationProfile>();
 
         [SerializeField] private SpriteAnimationProfile profile;
         [SerializeField] private bool settingsVisible;
+        [SerializeField] private bool overviewVisible;
 
         private SpriteAnimationScan scan;
         private SerializedObject settingsObject;
+        private SpriteAnimationProfile settingsProfile;
         private IVisualElementScheduledItem refreshItem;
 
         private ProfileTabBar tabBar;
+        private VariantStrip variantStrip;
+        private VariantOverview overview;
+        private VisualElement actionBar;
+        private Button buildFamilyButton;
         private ScrollView settingsPanel;
         private ToolbarSearchField searchField;
         private EnumField statusFilter;
@@ -70,6 +77,9 @@ namespace MM.SpriteAnimation
             tabBar = new ProfileTabBar(SelectProfile, OnProfileCreated, OnSettingsToggled);
             root.Add(tabBar);
 
+            variantStrip = new VariantStrip(SelectProfile, tabBar.CreateVariantOf, OnOverviewToggled);
+            root.Add(variantStrip);
+
             settingsPanel = new ScrollView();
             settingsPanel.AddToClassList("sab-settings");
             root.Add(settingsPanel);
@@ -90,7 +100,11 @@ namespace MM.SpriteAnimation
             var upper = new VisualElement();
             upper.AddToClassList("sab-upper");
             upper.Add(table.View);
-            upper.Add(CreateActionBar());
+            actionBar = CreateActionBar();
+            upper.Add(actionBar);
+            overview = new VariantOverview();
+            overview.CellClicked += OnOverviewCellClicked;
+            upper.Add(overview);
 
             preview = new SpriteAnimationPreview();
             var lower = new TwoPaneSplitView(1, 300f, TwoPaneSplitViewOrientation.Horizontal) { viewDataKey = "sab-split-lower" };
@@ -134,6 +148,9 @@ namespace MM.SpriteAnimation
             bar.Add(new Button(() => Run(SelectedNames(), false)) { text = "Build Selected" });
             bar.Add(new Button(() => Run(Names(source => source.NeedsBuild), false)) { text = "Build Ready" });
             bar.Add(new Button(() => Run(Names(source => source.InBuildAll), false)) { text = "Build All" });
+            buildFamilyButton = new Button(RunFamily) { text = "Build Family" };
+            buildFamilyButton.style.display = DisplayStyle.None;
+            bar.Add(buildFamilyButton);
             return bar;
         }
 
@@ -180,21 +197,78 @@ namespace MM.SpriteAnimation
 
         private void OnLogSelected(IEnumerable<object> selection)
         {
-            if (selection.FirstOrDefault() is ReportEntry entry && entry.Animation != null) table.Select(entry.Animation);
+            int index = logView.selectedIndex;
+            if (index < 0 || index >= log.Count) return;
+
+            ReportEntry entry = log[index];
+            SpriteAnimationProfile owner = logOwners[index];
+            if (owner != null && owner != profile) SelectProfile(owner);
+            if (entry.Animation != null) table.Select(entry.Animation);
         }
 
         private void ClearLog()
         {
             log.Clear();
+            logOwners.Clear();
             logView.RefreshItems();
         }
 
-        private void AppendLog(SpriteAnimationReport report)
+        private void AppendLog(SpriteAnimationProfile owner, SpriteAnimationReport report)
         {
             log.InsertRange(0, report.Entries);
-            if (log.Count > MaxLogEntries) log.RemoveRange(MaxLogEntries, log.Count - MaxLogEntries);
+            logOwners.InsertRange(0, Enumerable.Repeat(owner, report.Entries.Count));
+            if (log.Count > MaxLogEntries)
+            {
+                log.RemoveRange(MaxLogEntries, log.Count - MaxLogEntries);
+                logOwners.RemoveRange(MaxLogEntries, logOwners.Count - MaxLogEntries);
+            }
             logView.RefreshItems();
             logView.ScrollToItem(0);
+        }
+
+        private void RunFamily()
+        {
+            IReadOnlyList<SpriteAnimationProfile> family = tabBar.FamilyOf(profile);
+            if (family.Count < 2) return;
+
+            List<string> clashes = family.SelectMany(member => ProfileVariants.ClipClashes(member, family).Select(clash => $"{member.DisplayName}: {clash}")).ToList();
+            if (clashes.Count > 0)
+            {
+                var stopped = new SpriteAnimationReport();
+                foreach (string clash in clashes) stopped.Error(null, $"Build Family stopped. {clash}");
+                AppendLog(profile, stopped);
+                return;
+            }
+
+            try
+            {
+                for (int i = 0; i < family.Count; i++)
+                {
+                    SpriteAnimationProfile member = family[i];
+                    int index = i;
+                    Action<string, float> progress = (info, value) => EditorUtility.DisplayProgressBar("Building family", $"{member.DisplayName}: {info}", (index + value) / family.Count);
+                    SpriteAnimationReport report;
+                    try
+                    {
+                        report = SpriteAnimationBuilder.Build(member, null, progress);
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogException(exception);
+                        report = new SpriteAnimationReport();
+                        report.Error(null, $"{exception.GetType().Name}: {exception.Message} (stack trace in the Console)");
+                    }
+                    AppendLog(member, report);
+                    var header = new SpriteAnimationReport();
+                    header.Info(null, $"— {member.DisplayName} —");
+                    AppendLog(member, header);
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+            Refresh();
         }
 
         private void Run(IEnumerable<string> names, bool validateOnly, bool resetTiming = false)
@@ -227,7 +301,7 @@ namespace MM.SpriteAnimation
                     EditorUtility.ClearProgressBar();
                 }
             }
-            AppendLog(report);
+            AppendLog(profile, report);
             Refresh();
         }
 
@@ -268,6 +342,20 @@ namespace MM.SpriteAnimation
             scan = profile != null ? SpriteAnimationScanner.Scan(profile) : null;
             ShowProfileMessage();
             ApplyFilter();
+
+            IReadOnlyList<SpriteAnimationProfile> family = tabBar.FamilyOf(profile);
+            variantStrip.SetFamily(family, profile, overviewVisible);
+            buildFamilyButton.style.display = family.Count > 1 ? DisplayStyle.Flex : DisplayStyle.None;
+
+            bool showOverview = overviewVisible && family.Count > 1;
+            table.View.style.display = showOverview ? DisplayStyle.None : DisplayStyle.Flex;
+            actionBar.style.display = showOverview ? DisplayStyle.None : DisplayStyle.Flex;
+            overview.style.display = showOverview ? DisplayStyle.Flex : DisplayStyle.None;
+            if (showOverview)
+            {
+                List<SpriteAnimationScan> scans = family.Select(member => member == profile ? scan : SpriteAnimationScanner.Scan(member)).ToList();
+                overview.SetData(family, scans);
+            }
         }
 
         private void ShowProfileMessage()
@@ -278,9 +366,15 @@ namespace MM.SpriteAnimation
             {
                 lines.AddRange(scan.ProfileErrors);
                 lines.AddRange(scan.ProfileWarnings);
+                lines.AddRange(SiblingClashes());
             }
             profileMessage.text = string.Join("\n", lines);
             profileMessage.style.display = lines.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private IEnumerable<string> SiblingClashes()
+        {
+            return ProfileVariants.ClipClashes(profile, tabBar.FamilyOf(profile).Where(other => other != profile.VariantOf));
         }
 
         private void ApplyFilter()
@@ -305,6 +399,7 @@ namespace MM.SpriteAnimation
                 case StatusFilter.Invalid: return source.Status == AnimationStatus.Invalid;
                 case StatusFilter.NoArt: return source.Status == AnimationStatus.NoArt;
                 case StatusFilter.NoState: return source.Status == AnimationStatus.NoState;
+                case StatusFilter.Fallback: return source.IsFallback;
                 default: return true;
             }
         }
@@ -330,14 +425,30 @@ namespace MM.SpriteAnimation
             RebuildSettings();
         }
 
+        private void OnOverviewToggled(bool visible)
+        {
+            overviewVisible = visible;
+            Refresh();
+        }
+
+        private void OnOverviewCellClicked(SpriteAnimationProfile member, string name)
+        {
+            searchField.SetValueWithoutNotify(string.Empty);
+            statusFilter.SetValueWithoutNotify(StatusFilter.All);
+            overviewVisible = false;
+            SelectProfile(member);
+            table.Select(name);
+        }
+
         private void ReloadProfiles()
         {
             profile = tabBar.Reload(profile, settingsVisible, out bool rebuilt);
-            if (rebuilt) RebuildSettings();
+            if (rebuilt || profile != settingsProfile) RebuildSettings();
         }
 
         private void RebuildSettings()
         {
+            settingsProfile = profile;
             settingsPanel.Clear();
             DisposeSettingsObject();
             bool show = settingsVisible && profile != null;

@@ -71,6 +71,11 @@ namespace MM.SpriteAnimation
                 hash.Add("tick");
                 hash.Add(tickRate);
             }
+            if (source.IsFallback)
+            {
+                hash.Add("fallback");
+                hash.Add(source.ArtName);
+            }
             return hash.Value.ToString("x16", CultureInfo.InvariantCulture);
         }
 
@@ -113,6 +118,11 @@ namespace MM.SpriteAnimation
             {
                 hash.Add("override");
                 hash.Add(AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(overrideController)));
+            }
+            if (profile.FolderPrefix.Length > 0)
+            {
+                hash.Add("folderPrefix");
+                hash.Add(profile.FolderPrefix);
             }
         }
 
